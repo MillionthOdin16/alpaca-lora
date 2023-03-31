@@ -66,12 +66,10 @@ python finetune.py \
 This file reads the foundation model from the Hugging Face model hub and the LoRA weights from `tloen/alpaca-lora-7b`, and runs a Gradio interface for inference on a specified input. Users should treat this as example code for the use of the model, and modify it as needed.
 
 Example usage:
+[//]: # (python generate.py --load_8bit --base_model 'D:\models\llama-7b-hf' --lora_weights 'D:\models\gpt4all\gpt4all-lora')
 
 ```bash
-python generate.py \
-    --load_8bit \
-    --base_model 'decapoda-research/llama-7b-hf' \
-    --lora_weights 'tloen/alpaca-lora-7b'
+python generate.py --load_4bit --base_model "D:\models\llama-7b-hf" --lora_weights "D:\models\gpt4all\gpt4all-lora"
 ```
 
 ### Official weights

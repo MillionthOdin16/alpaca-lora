@@ -8,7 +8,7 @@ services:
       args:
         BUILDKIT_INLINE_CACHE: "0"
     image: alpaca-lora
-    shm_size: '64gb'
+    shm_size: '32gb'
     command: generate.py --load_8bit --base_model $BASE_MODEL --lora_weights 'tloen/alpaca-lora-7b'
     restart: unless-stopped
     volumes:

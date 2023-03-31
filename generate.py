@@ -7,6 +7,8 @@ import torch
 import transformers
 from peft import PeftModel
 from transformers import GenerationConfig, LlamaForCausalLM, LlamaTokenizer
+from autograd_4bit import load_llama_model_4bit_low_ram, Autograd4bitQuantLinear
+from peft.tuners.lora import Linear4bitLt
 
 from utils.prompter import Prompter
 
@@ -27,8 +29,10 @@ def main(
     base_model: str = "",
     lora_weights: str = "tloen/alpaca-lora-7b",
     prompt_template: str = "",  # The prompt template to use, will default to alpaca.
-    server_name: str = "0.0.0.0",  # Allows to listen on all interfaces by providing '0.
+    server_name: str = "0.0.0.0",  # Allows to listen on all interfaces by providing
     share_gradio: bool = False,
+    load_4bit: bool = False,
+    cpu_only: bool = False,
 ):
     base_model = base_model or os.environ.get("BASE_MODEL", "")
     assert (
@@ -37,39 +41,90 @@ def main(
 
     prompter = Prompter(prompt_template)
     tokenizer = LlamaTokenizer.from_pretrained(base_model)
-    if device == "cuda":
-        model = LlamaForCausalLM.from_pretrained(
-            base_model,
-            load_in_8bit=load_8bit,
-            torch_dtype=torch.float16,
-            device_map="auto",
-        )
-        model = PeftModel.from_pretrained(
-            model,
-            lora_weights,
-            torch_dtype=torch.float16,
-        )
-    elif device == "mps":
-        model = LlamaForCausalLM.from_pretrained(
-            base_model,
-            device_map={"": device},
-            torch_dtype=torch.float16,
-        )
-        model = PeftModel.from_pretrained(
-            model,
-            lora_weights,
-            device_map={"": device},
-            torch_dtype=torch.float16,
-        )
+
+    # model, tokenizer = load_llama_model_4bit_low_ram(base_model, base_model + '/llama-7b-4bit.pt')
+    # model = PeftModel.from_pretrained(model, lora_weights)
+    # print('Fitting 4bit scales and zeros to half')
+    # for n, m in model.named_modules():
+    #     if isinstance(m, Autograd4bitQuantLinear) or isinstance(m, Linear4bitLt):
+    #         m.zeros = m.zeros.half()
+    #         m.scales = m.scales.half()
+    #         m.bias = m.bias.half()
+
+    if torch.cuda.is_available():
+        device = "cuda"
     else:
-        model = LlamaForCausalLM.from_pretrained(
-            base_model, device_map={"": device}, low_cpu_mem_usage=True
-        )
-        model = PeftModel.from_pretrained(
-            model,
-            lora_weights,
-            device_map={"": device},
-        )
+        device = "cpu"
+
+    if cpu_only:
+        device = "cpu"
+
+    if load_4bit:
+        # Load 4bit model
+        if device == "cuda":
+            model, tokenizer = load_llama_model_4bit_low_ram(
+                base_model,
+                base_model + '/llama-7b-4bit.pt',
+                device_map="auto",
+            )
+            model = PeftModel.from_pretrained(
+                model,
+                lora_weights
+            )
+        else:
+            model, tokenizer = load_llama_model_4bit_low_ram(
+                base_model,
+                base_model + '/llama-7b-4bit.pt',
+                device_map={"": device},
+                low_cpu_mem_usage=True
+                )
+            model = PeftModel.from_pretrained(
+                model,
+                lora_weights,
+                device_map={"": device},
+            )
+
+        print('Fitting 4bit scales and zeros to half')
+        for n, m in model.named_modules():
+            if isinstance(m, Autograd4bitQuantLinear) or isinstance(m, Linear4bitLt):
+                m.zeros = m.zeros.half()
+                m.scales = m.scales.half()
+                m.bias = m.bias.half()
+    else:
+        # If we're not using 4bit, we can use the default model loading.
+        if device == "cuda":
+            model = LlamaForCausalLM.from_pretrained(
+                base_model,
+                load_in_8bit=load_8bit,
+                torch_dtype=torch.float16,
+                device_map="auto",
+            )
+            model = PeftModel.from_pretrained(
+                model,
+                lora_weights,
+                torch_dtype=torch.float16,
+            )
+        elif device == "mps":
+            model = LlamaForCausalLM.from_pretrained(
+                base_model,
+                device_map={"": device},
+                torch_dtype=torch.float16,
+            )
+            model = PeftModel.from_pretrained(
+                model,
+                lora_weights,
+                device_map={"": device},
+                torch_dtype=torch.float16,
+            )
+        else:
+            model = LlamaForCausalLM.from_pretrained(
+                base_model, device_map={"": device}, low_cpu_mem_usage=True
+            )
+            model = PeftModel.from_pretrained(
+                model,
+                lora_weights,
+                device_map={"": device},
+            )
 
     # unwind broken decapoda-research config
     model.config.pad_token_id = tokenizer.pad_token_id = 0  # unk
@@ -86,10 +141,10 @@ def main(
     def evaluate(
         instruction,
         input=None,
-        temperature=0.1,
-        top_p=0.75,
+        temperature=0.5,
+        top_p=0.90,
         top_k=40,
-        num_beams=4,
+        num_beams=1,
         max_new_tokens=128,
         **kwargs,
     ):
