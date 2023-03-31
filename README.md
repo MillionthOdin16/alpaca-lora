@@ -1,5 +1,11 @@
 # 🦙🌲🤏 Alpaca-LoRA
 
+**[ This fork is modified to run 4-bit quantized GPTQ models like gpt4all and llamacpp model files ]**  
+https://github.com/ggerganov/llama.cpp  
+https://github.com/nomic-ai/gpt4all  
+  
+---------  
+  
 - 🤗 **Try the pretrained model out [here](https://huggingface.co/spaces/tloen/alpaca-lora), courtesy of a GPU grant from Huggingface!**
 - Users have created a Discord server for discussion and support [here](https://discord.gg/prbq284xX5)
 
